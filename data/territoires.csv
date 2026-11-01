@@ -1,0 +1,76 @@
+period,place,kind,start,end,in_notes,source
+1,Mésopotamie,région,-3000,80,Sumériens (Mésopotamie),notes ; contour estimation
+1,Assyrie,région,-3000,80,Assyriens,notes ; contour estimation
+1,Turquie,pays,-3000,80,Asie Mineure,notes
+2,Vallée du Nil,région,-3000,394,vallée du Nil (Pierre de Rosette),notes ; contour estimation
+3,Chine,pays,-2600,1040,"Chine, « tout l'empire »",notes
+4,Syrie,pays,-1700,-600,"Phéniciens, côte méditerranéenne",notes
+4,Liban,pays,-1700,-600,idem,notes
+4,Israël,pays,-1700,-600,idem,notes
+4,Ougarit,ville,-1700,-600,Ougarit,notes
+4,Grèce,pays,-1700,-600,colonies de la mer Égée,notes
+4,Milet,ville,-1700,-600,côte d'Asie Mineure (Milet),notes
+5,Italie,pays,-600,950,inspiré des Étrusques et des Grecs (Italie),notes
+5,Empire romain,région,-27,476,capitales romaines,estimation (étendue et dates)
+6,Bagdad,ville,750,1258,"Bagdad, papier appris des Chinois",notes
+7,Europe,région,950,1230,« partout en Europe »,notes ; liste de pays estimation
+8,Italie,pays,1230,1500,gothique : Italie,notes
+8,Espagne,pays,1230,1500,Espagne,notes
+8,Allemagne,pays,1230,1500,Allemagne (rotunda),notes
+9,Mayence,ville,1450,1600,Gutenberg,estimation (lieu)
+9,Europe,région,1500,1600,« plus de 1 100 dans toute l'Europe » en 1500,notes ; liste de pays estimation
+9,Venise,ville,1470,1600,"Manuce, Jenson",notes ; début estimation
+9,France,pays,1530,1600,école française (Garamond),notes ; début estimation
+10,France,pays,1550,1760,"baroque, Romain du Roi",notes
+10,Pays-Bas,pays,1550,1760,Hollande,notes
+10,Royaume-Uni,pays,1550,1760,Angleterre,notes
+11,Italie,pays,1760,1830,Bodoni,notes
+11,France,pays,1760,1830,Didot,notes
+11,Royaume-Uni,pays,1760,1830,Bell,notes
+12,Allemagne,pays,1830,1900,1830–1900,notes
+12,États-Unis,pays,1830,1900,1830–1900,notes
+12,Londres,ville,1851,1851,Crystal Palace,notes
+13,Royaume-Uni,pays,1880,1900,"Morris, Kelmscott",notes
+14,Royaume-Uni,pays,1890,1914,*The Studio*,notes ; pays déduit de la revue
+14,France,pays,1890,1914,*La Revue blanche*,notes ; pays déduit de la revue
+14,Allemagne,pays,1890,1914,"*Pan*, *Die Woche*, *Insel*, *Jugend*",notes ; pays déduit de la revue
+15,Italie,pays,1910,1925,futurisme,notes
+15,États-Unis,pays,1910,1925,"futurisme, Art déco",notes
+15,Zurich,ville,1910,1925,dada,notes
+15,Berlin,ville,1910,1925,dada,notes
+15,Paris,ville,1910,1925,dada,notes
+15,New York,ville,1910,1925,dada,notes
+15,URSS,région,1910,1925,constructivisme,notes ; liste de pays estimation
+15,Pays-Bas,pays,1910,1925,"De Stijl, Art déco",notes
+15,Hongrie,pays,1910,1925,constructivisme,notes
+15,Tchécoslovaquie,région,1910,1925,constructivisme,notes
+15,Pologne,pays,1910,1925,constructivisme,notes
+15,Yougoslavie,région,1910,1925,constructivisme,notes
+15,Allemagne,pays,1910,1925,Bauhaus,notes
+15,France,pays,1910,1925,Art déco,notes
+15,Royaume-Uni,pays,1910,1925,Art déco,notes
+15,Suisse,pays,1910,1925,Art déco,notes
+15,Europe centrale,région,1910,1925,Art déco,notes ; liste de pays estimation
+16,Allemagne,pays,1925,1935,"Futura, Erbar",notes
+16,Royaume-Uni,pays,1925,1935,Gill,notes
+17,Royaume-Uni,pays,1935,1945,"Times, métro de Londres",notes
+17,Italie,pays,1935,1945,1935,notes
+17,Pays-Bas,pays,1935,1945,1935,notes
+17,États-Unis,pays,1935,1945,1935,notes
+17,Allemagne,pays,1935,1945,1935,notes
+18,Suisse,pays,1945,1965,"Zurich, Bâle",notes
+18,Zurich,ville,1945,1965,idem,notes
+18,Bâle,ville,1945,1965,idem,notes
+18,États-Unis,pays,1945,1965,1945,notes
+19,Los Angeles,ville,1965,1975,1965,notes
+19,New York,ville,1965,1975,1965,notes
+19,Chicago,ville,1965,1975,1965,notes
+19,Londres,ville,1965,1975,1965,notes
+19,Japon,pays,1965,1975,1965,notes
+20,Londres,ville,1975,1980,—,estimation (aucun lieu dans ses notes)
+20,New York,ville,1975,1980,—,estimation (aucun lieu dans ses notes)
+21,Londres,ville,1980,1985,8vo,notes
+21,Milan,ville,1980,1985,Memphis,estimation (lieu)
+22,États-Unis,pays,1985,1990,—,estimation (aucun lieu dans ses notes)
+22,Royaume-Uni,pays,1985,1990,—,estimation (aucun lieu dans ses notes)
+23,Monde,région,1988,2026,« le sommet couvre tout » (§ À trancher),estimation

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sculpture typographique</title>
+<style>
+  :root { --bg:#f4f1ea; --panel:#fffdf8; --ink:#1d1b17; --muted:#6d675c; --line:#d9d2c3; --warn:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16140f; --panel:#1f1c16; --ink:#efe9dc; --muted:#a59d8c; --line:#3a352b; --warn:#ff8a80; } }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:14px/1.4 system-ui, -apple-system, "Helvetica Neue", sans-serif; }
+  #app { display:grid; grid-template-columns: 1fr 360px; height:100vh; }
+  #view { position:relative; min-height:0; }
+  canvas { display:block; }
+  aside { background:var(--panel); border-left:1px solid var(--line); overflow:auto; padding:16px; }
+  h1 { font-size:16px; margin:0 0 4px; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:18px 0 6px; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; padding:5px 10px; border:1px solid var(--line); background:transparent; color:var(--ink); border-radius:6px; cursor:pointer; }
+  button.on { background:var(--ink); color:var(--panel); }
+  input[type=range] { width:100%; }
+  #date { font-size:22px; font-weight:600; font-variant-numeric: tabular-nums; }
+  .muted { color:var(--muted); font-size:12px; }
+  ul { list-style:none; padding:0; margin:0; }
+  li.p { display:flex; gap:8px; align-items:flex-start; padding:3px 4px; border-radius:4px; cursor:pointer; }
+  li.p:hover { background:color-mix(in srgb, var(--ink) 7%, transparent); }
+  li.p.sel { outline:1.5px solid var(--ink); }
+  li.p.off { opacity:.35; }
+  .sw { width:12px; height:12px; border-radius:2px; flex:none; margin-top:3px; }
+  .est { color:var(--warn); }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  td { padding:2px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  #hud { position:absolute; left:12px; top:12px; background:color-mix(in srgb, var(--panel) 88%, transparent); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; max-width:min(320px, 70vw); }
+  @media (max-width: 800px) { #app { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height:auto; } aside { border-left:0; border-top:1px solid var(--line); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="view"><div id="hud">Chargement…</div></div>
+  <aside>
+    <h1>Sculpture de l'histoire de la typographie</h1>
+    <div class="muted">Prototype 1:1 · ESADSE, Atelier Graphisme · généré depuis la note de la vault</div>
+
+    <h2>Vue</h2>
+    <div class="row" id="views">
+      <button data-v="iso" class="on">3/4</button><button data-v="face">Face</button>
+      <button data-v="droite">Droite</button><button data-v="dessus">Dessus</button>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button id="tMap" class="on">Carte au sol</button><button id="tWalls" class="on">Parois</button><button id="tBridges" class="on">Ponts</button>
+    </div>
+
+    <h2>Carton</h2>
+    <div class="row" id="thick"><button data-t="5" class="on">5 mm</button><button data-t="3">3 mm</button></div>
+    <div id="stats" class="muted" style="margin-top:6px"></div>
+
+    <h2>Temps</h2>
+    <div id="date">—</div>
+    <input type="range" id="slider" min="0" max="0" value="0">
+    <div class="row"><button id="prev">◀ couche</button><button id="next">couche ▶</button><button id="all">Tout</button></div>
+    <div id="layerInfo" class="muted" style="margin-top:6px"></div>
+
+    <h2>Lieux de cette couche</h2>
+    <table id="places"></table>
+
+    <h2>Périodes <span class="muted" style="text-transform:none">(clic = isoler)</span></h2>
+    <ul id="periods"></ul>
+  </aside>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = s => document.querySelector(s);
+const view = $('#view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 10, 20000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 450, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8070, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(600, 1400, 900); scene.add(sun);
+
+function bg() { scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()); }
+bg(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', bg);
+
+function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+
+const meta = await (await fetch('meta.json')).json();
+const { W, D, H } = meta.volume;
+const X = x => x - W / 2, Z = y => y - D / 2;              // carte (mm) → scène
+const periodBy = Object.fromEntries(meta.periods.map(p => [p.n, p]));
+
+// --- Socle, cadre et parois (nota § Volume) -------------------------------
+const fixed = new THREE.Group(); scene.add(fixed);
+const baseMat = new THREE.MeshStandardMaterial({ color: 0xcdbf9f, roughness: 1 });
+const base = new THREE.Mesh(new THREE.BoxGeometry(600, 10, 400), baseMat); base.position.y = -5; fixed.add(base);
+const walls = new THREE.Group(); fixed.add(walls);
+const wallMat = new THREE.MeshStandardMaterial({ color: 0xf6f2e8, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+const back = new THREE.Mesh(new THREE.PlaneGeometry(600, 1000), wallMat); back.position.set(0, 500, -200); walls.add(back);
+const left = new THREE.Mesh(new THREE.PlaneGeometry(400, 1000), wallMat); left.rotation.y = Math.PI / 2; left.position.set(-300, 500, 0); walls.add(left);
+const edge = new THREE.LineBasicMaterial({ color: 0x8a7f6a });
+const be = new THREE.LineSegments(new THREE.EdgesGeometry(back.geometry), edge); be.position.copy(back.position); walls.add(be);
+const le = new THREE.LineSegments(new THREE.EdgesGeometry(left.geometry), edge); le.rotation.copy(left.rotation); le.position.copy(left.position); walls.add(le);
+// espace de 50 × 30
+const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, 0.1, D)), new THREE.LineBasicMaterial({ color: 0x5d5446 }));
+frame.position.y = 0.2; fixed.add(frame);
+// carte au sol
+const mapLines = new THREE.Group(); fixed.add(mapLines);
+const mapMat = new THREE.LineBasicMaterial({ color: 0x7b6f58 });
+for (const poly of meta.land) for (const ring of poly) {
+  const pts = ring.map(([x, y]) => new THREE.Vector3(X(x), 0.3, Z(y))); pts.push(pts[0]);
+  mapLines.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mapMat));
+}
+// limites des disques (sur la paroi du fond)
+for (let i = 1; i < meta.discs.length; i++) {
+  const y = i * meta.volume.disc_h;
+  walls.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-300, y, -199), new THREE.Vector3(300, y, -199), new THREE.Vector3(-299, y, -199), new THREE.Vector3(-299, y, 200)]), new THREE.LineDashedMaterial({ color: 0x8a7f6a })));
+}
+
+// --- Modèle par épaisseur ---------------------------------------------------
+let model = null, layerGroups = [], bridgeGroup = null, current = 0, showAll = true, isolated = null;
+const sculpture = new THREE.Group(); scene.add(sculpture);
+const mats = {}, dimMats = {};
+for (const p of meta.periods) {
+  mats[p.n] = new THREE.MeshStandardMaterial({ color: new THREE.Color().setStyle(p.color), roughness: 0.9 });
+  dimMats[p.n] = new THREE.MeshStandardMaterial({ color: new THREE.Color().setStyle(p.color), roughness: 0.9, transparent: true, opacity: 0.08, depthWrite: false });
+}
+const hiMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+
+async function load(t) {
+  model = await (await fetch(`layers-${t}.json`)).json();
+  sculpture.clear(); layerGroups = [];
+  const geoms = model.shapes.map(s => {
+    const shape = new THREE.Shape(s.rings[0].map(([x, y]) => new THREE.Vector2(X(x), -Z(y))));
+    for (const h of s.rings.slice(1)) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(X(x), -Z(y)))));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: model.thickness * 0.96, bevelEnabled: false, curveSegments: 4 });
+    g.rotateX(-Math.PI / 2);
+    return g;
+  });
+  for (const L of model.layers) {
+    const g = new THREE.Group(); g.position.y = L.z0; g.userData = L;
+    for (const sid of L.pieces) {
+      const m = new THREE.Mesh(geoms[sid], mats[model.shapes[sid].period]);
+      m.userData = { layer: L.i, period: model.shapes[sid].period };
+      g.add(m);
+    }
+    sculpture.add(g); layerGroups.push(g);
+  }
+  bridgeGroup = new THREE.Group(); sculpture.add(bridgeGroup);
+  const bm = new THREE.MeshBasicMaterial({ color: 0xd32f2f });
+  for (const L of model.layers) for (const b of L.bridges) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 40, 8), bm);
+    c.position.set(X(b.x), L.z0 - 20, Z(b.y)); c.userData = { layer: L.i }; bridgeGroup.add(c);
+  }
+  bridgeGroup.visible = $('#tBridges').classList.contains('on');
+  const s = model.stats;
+  $('#stats').innerHTML = `${s.layers} couches · <b>${s.bridges}</b> pièces sans appui (pont/pilier) · ${s.cardboard_m2} m² de carton · ${s.cut_m} m de découpe` +
+    (s.empty_layers.length ? `<br><span class="est">Couches vides : ${s.empty_layers.join(', ')}</span>` : '');
+  $('#slider').max = model.layers.length - 1;
+  current = Math.min(current, model.layers.length - 1); $('#slider').value = current;
+  update();
+}
+
+// --- Interface ---------------------------------------------------------------
+const fmt = d => d < 0 ? `${Math.round(-d)} av. J.-C.` : `${Math.round(d)}`;
+const plist = $('#periods');
+for (const p of meta.periods) {
+  const li = document.createElement('li'); li.className = 'p'; li.dataset.n = p.n;
+  li.innerHTML = `<span class="sw" style="background:${p.color}"></span><span><b>${p.n}.</b> ${p.name}<br><span class="muted">${p.start} → ${p.end}</span></span>`;
+  li.onclick = () => { isolated = isolated === p.n ? null : p.n; showAll = true; $('#slider').value = model.layers.length - 1; current = model.layers.length - 1; update(); };
+  plist.appendChild(li);
+}
+
+let hiLines = null;
+function update() {
+  if (!model) return;
+  const L = model.layers[current];
+  layerGroups.forEach((g, i) => {
+    g.visible = i <= current;
+    for (const m of g.children) m.material = (isolated && m.userData.period !== isolated) ? dimMats[m.userData.period] : mats[m.userData.period];
+  });
+  bridgeGroup.children.forEach(c => c.visible = c.userData.layer <= current);
+  if (hiLines) sculpture.remove(hiLines);
+  hiLines = new THREE.Group();
+  if (!showAll) for (const m of layerGroups[current].children) {
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 30), hiMat); e.position.y = L.z0; hiLines.add(e);
+  }
+  sculpture.add(hiLines);
+  const disc = meta.discs[L.disc];
+  $('#date').textContent = `${fmt(L.d0)} → ${fmt(L.d1)}`;
+  $('#layerInfo').innerHTML = `Couche ${L.i + 1}/${model.layers.length} · hauteur ${L.z0.toFixed(0)} mm · disque ${L.disc + 1} (${disc.name})` +
+    (L.bridges.length ? ` · <span class="est">${L.bridges.length} pièce(s) sans appui</span>` : '');
+  const rows = meta.rows.filter(r => L.periods.includes(r.period) && r.start <= L.d1 && r.end >= L.d0);
+  $('#places').innerHTML = rows.map(r => `<tr><td><span class="sw" style="display:inline-block;background:${periodBy[r.period].color}"></span> ${r.period}</td><td><b>${r.place}</b> <span class="muted">${r.kind}</span><br><span class="muted">${r.in_notes}</span></td><td class="${/estimation/.test(r.source) ? 'est' : 'muted'}">${r.source}</td></tr>`).join('') || '<tr><td class="est">Aucun lieu : couche vide</td></tr>';
+  for (const li of plist.children) {
+    const n = +li.dataset.n;
+    li.classList.toggle('off', !L.periods.includes(n) && !isolated);
+    li.classList.toggle('sel', isolated === n);
+  }
+  $('#hud').innerHTML = `<b>${fmt(L.d0)} → ${fmt(L.d1)}</b> · ${disc.name}<br>${L.periods.map(n => `<span class="sw" style="display:inline-block;background:${periodBy[n].color}"></span> ${periodBy[n].name}`).join('<br>')}`;
+}
+
+$('#slider').oninput = e => { current = +e.target.value; showAll = false; update(); };
+$('#prev').onclick = () => { current = Math.max(0, current - 1); $('#slider').value = current; showAll = false; update(); };
+$('#next').onclick = () => { current = Math.min(model.layers.length - 1, current + 1); $('#slider').value = current; showAll = false; update(); };
+$('#all').onclick = () => { current = model.layers.length - 1; $('#slider').value = current; showAll = true; isolated = null; update(); };
+for (const b of document.querySelectorAll('#thick button')) b.onclick = () => {
+  document.querySelectorAll('#thick button').forEach(x => x.classList.toggle('on', x === b)); load(b.dataset.t);
+};
+const toggle = (id, obj) => $(id).onclick = e => { e.target.classList.toggle('on'); obj().visible = e.target.classList.contains('on'); };
+toggle('#tMap', () => mapLines); toggle('#tWalls', () => walls); toggle('#tBridges', () => bridgeGroup);
+
+const VIEWS = { iso: [1300, 1200, 1500], face: [0, 480, 2600], droite: [2300, 480, 0], dessus: [0, 2400, 1] };
+function setView(v) {
+  camera.position.set(...VIEWS[v]); controls.target.set(0, v === 'dessus' ? 0 : 450, 0); controls.update();
+  document.querySelectorAll('#views button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
+}
+for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.v);
+
+// clic sur une pièce → cette couche
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(layerGroups.filter(g => g.visible), true).find(h => h.object.material.opacity !== 0.08);
+  if (hit) { current = hit.object.userData.layer; $('#slider').value = current; showAll = false; update(); }
+});
+
+resize(); setView('iso');
+await load(5);
+current = model.layers.length - 1; $('#slider').value = current; update();
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
