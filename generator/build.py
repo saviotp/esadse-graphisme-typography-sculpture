@@ -5,6 +5,8 @@ Uso:  .venv/bin/python generator/build.py "<caminho da nota .md>"
 Saídas: data/territoires.csv, docs/layers-<t>.json, out/plates/*.svg, out/plates/layers-<t>.csv
 """
 import csv, hashlib, json, math, re, sys
+
+import numpy as np
 from pathlib import Path
 
 from shapely import ops
@@ -210,9 +212,11 @@ def build(t, periods, rows, geoms):
 # vários picos quando os lóbulos se afastam.
 PARENT = {4: 1, 5: 4, 6: 3, 7: 5, 8: 7, 9: 8, 10: 9, 11: 10, 12: 11, 13: 12, 14: 13, 15: 14,
           16: 15, 17: 16, 18: 17, 19: 18, 20: 19, 21: 20, 22: 21, 23: 22}   # 6 ← 3 : « papier appris des Chinois »
-R_MIN, R_MAX, R_K = 16.0, 110.0, 0.9     # mm
-FADE = 45.0                              # mm de altura para entrar/sair
-MIGRATE = 70.0                           # mm de altura para viajar do pai até o lugar
+R_MIN, R_MAX, R_K = 18.0, 110.0, 0.9     # mm
+FADE = 110.0                             # mm de altura para entrar/sair (lento = líquido)
+MIGRATE = 160.0                          # mm de altura para viajar do pai até o lugar
+VSTEP = 2.5                              # mm — grade do volume
+BLUR_XY, BLUR_Z = 4.0, 14.0              # mm — desfoque 3D do campo: o « líquido »
 GRID = 1.0                               # mm
 
 def smooth(u): u = min(max(u, 0.0), 1.0); return u * u * (3 - 2 * u)
@@ -233,7 +237,8 @@ def lobe_state(L, n, z):
     Entra: parte do centro do pai com peso cheio e migra até o seu lugar (o « braço »).
     Sai: dissolve-se depois do fim, durante FADE mm, dentro do que vem por cima."""
     l = L[n]
-    tail = FADE if l["ze"] < H else 0.0
+    span0 = max(l["ze"] - l["zs"], 1e-6)
+    tail = min(FADE, max(span0, 30.0)) if l["ze"] < H else 0.0      # curto se dissolve depressa
     if z < l["zs"] - 1e-6 or z > l["ze"] + tail + 1e-6: return None
     span = max(l["ze"] - l["zs"], 1e-6)
     w_in = smooth((z - l["zs"]) / min(FADE, span)) if l["zs"] > 0 else 1.0
@@ -241,7 +246,7 @@ def lobe_state(L, n, z):
     cx, cy = l["c"]
     par = PARENT.get(n)
     if par in L:
-        u = smooth((z - l["zs"]) / min(MIGRATE, max(span, FADE)))
+        u = smooth((z - l["zs"]) / min(MIGRATE, max(1.5 * span, 40.0)))
         pc = L[par]["c"]
         cx, cy = pc[0] + (cx - pc[0]) * u, pc[1] + (cy - pc[1]) * u
         w_in = max(w_in, 1 - u)                 # nasce ligado ao pai
@@ -262,35 +267,66 @@ def filled_polys(cg, level=0.5):
             out += polys(p)
     return out
 
-def build_field(t, periods, rows, geoms):
-    import numpy as np, contourpy
-    L = lobes(periods, rows, geoms)
-    xs = np.arange(0, W + GRID, GRID); ys = np.arange(0, D + GRID, GRID)
+def sig(r): return r / math.sqrt(2 * math.log(2))
+
+def lobe_fields(L, z, X, Y):
+    out = {}
+    for n in L:
+        st = lobe_state(L, n, z)
+        if st and st["w"] > 0.01:
+            out[n] = st["w"] * np.exp(-((X - st["c"][0]) ** 2 + (Y - st["c"][1]) ** 2) / (2 * sig(st["r"]) ** 2))
+    return out
+
+def make_volume(L):
+    """Campo 3D somado e desfocado. Fora do volume (abaixo de 0, acima de H, fora dos 50 × 30) vale 0,
+    para a superfície fechar."""
+    from scipy.ndimage import gaussian_filter
+    pad = 12 * VSTEP
+    xs = np.arange(-pad, W + pad + VSTEP / 2, VSTEP); ys = np.arange(-pad, D + pad + VSTEP / 2, VSTEP)
+    zs = np.arange(-pad, H + pad + VSTEP / 2, VSTEP)
     X, Y = np.meshgrid(xs, ys)
-    n = int(round(H / t))
+    inside = (X >= 0) & (X <= W) & (Y >= 0) & (Y <= D)
+    vol = np.zeros((len(zs), len(ys), len(xs)), dtype=np.float32)
+    for k, z in enumerate(zs):
+        if 0 <= z <= H:
+            f = sum(lobe_fields(L, z, X, Y).values(), np.zeros_like(X))
+            vol[k] = np.where(inside, f, 0)
+    vol = gaussian_filter(vol, sigma=(BLUR_Z / VSTEP, BLUR_XY / VSTEP, BLUR_XY / VSTEP))
+    # o desfoque escoa para fora da caixa: corta de novo nos limites do volume
+    zin = (zs >= 0) & (zs <= H)
+    vol *= inside[None, :, :] * zin[:, None, None]
+    return xs, ys, zs, vol
+
+def build_field(t, periods, rows, geoms, V):
+    import contourpy
+    L = lobes(periods, rows, geoms)
+    xs, ys, zs, vol = V
+    X, Y = np.meshgrid(xs, ys)
+    n = int(H // t)
     shapes, shape_ids, layers, csv_rows = [], {}, [], []
     prev_union = None
     for i in range(n):
         z0, z1 = i * t, (i + 1) * t; zm = (z0 + z1) / 2
         d0, disc = z_to_date(z0); d1, _ = z_to_date(z1 - 1e-6)
-        st = {k: s for k in L if (s := lobe_state(L, k, zm)) and s["w"] > 0.02}
+        k = int(np.argmin(np.abs(zs - zm)))
+        field = vol[k].astype(float)
+        lf = lobe_fields(L, zm, X, Y)
         pieces = []; union = Polygon()
-        if st:
-            keys = list(st)
-            contrib = np.stack([st[k]["w"] * np.exp(-((X - st[k]["c"][0]) ** 2 + (Y - st[k]["c"][1]) ** 2)
-                                                    / (2 * (st[k]["r"] / math.sqrt(2 * math.log(2))) ** 2)) for k in keys])
-            field = contrib.sum(0)
+        if field.max() >= 0.5:
             union = unary_union(filled_polys(contourpy.contour_generator(xs, ys, field, fill_type="OuterCode"))).intersection(BOX)
-            label = contrib.argmax(0)
-            for j, k in enumerate(keys):
+            if lf:
+                keys = list(lf); label = np.stack([lf[k_] for k_ in keys]).argmax(0)
+            else:
+                keys = []; label = None
+            for j, kk in enumerate(keys):
                 fp = np.where(label == j, field, 0.0)
                 if fp.max() < 0.5: continue
                 own = unary_union(filled_polys(contourpy.contour_generator(xs, ys, fp, fill_type="OuterCode"))).intersection(union)
                 for p in polys(own.simplify(SIMPLIFY)):
-                    key = (k, hashlib.md5(p.wkb).hexdigest())
+                    key = (kk, hashlib.md5(p.wkb).hexdigest())
                     if key not in shape_ids:
                         shape_ids[key] = len(shapes)
-                        shapes.append({"period": k, "rings": rings(p), "area": round(p.area, 1)})
+                        shapes.append({"period": kk, "rings": rings(p), "area": round(p.area, 1)})
                     pieces.append(shape_ids[key])
         bridges = []
         if prev_union is not None:
@@ -298,7 +334,7 @@ def build_field(t, periods, rows, geoms):
                 if comp.intersection(prev_union).area < 1.0:
                     c = comp.representative_point()
                     bridges.append({"x": round(c.x, 1), "y": round(c.y, 1), "area": round(comp.area, 1)})
-        active_p = sorted(st)
+        active_p = sorted(lf)
         active_rows = [r for r in rows if r["period"] in active_p]
         perim = sum(p.length for p in polys(union))
         layers.append({"i": i, "z0": round(z0, 2), "d0": round(d0, 1), "d1": round(d1, 1), "disc": disc,
@@ -311,8 +347,7 @@ def build_field(t, periods, rows, geoms):
     stats = {"layers": n, "bridges": sum(len(l["bridges"]) for l in layers),
              "cardboard_m2": round(sum(l["area"] for l in layers) / 1e6, 2),
              "cut_m": round(sum(l["cut"] for l in layers) / 1000, 1),
-             "empty_layers": [l["i"] + 1 for l in layers if not l["pieces"]], "mode": "field",
-             "lobes": {k: {"c": [round(v, 1) for v in l["c"]], "r": round(l["r"], 1)} for k, l in L.items()}}
+             "empty_layers": [l["i"] + 1 for l in layers if not l["pieces"]], "mode": "field"}
     return {"thickness": t, "shapes": shapes, "layers": layers, "stats": stats}, csv_rows
 
 
@@ -321,58 +356,45 @@ def hsl_rgb(s):
     h, sat, l = [float(v.strip("%")) for v in re.findall(r"[\d.]+%?", s)]
     return colorsys.hls_to_rgb(h / 360, l / 100, sat / 100)
 
-def build_smooth(periods, rows, geoms, colors, step=4.0):
-    """Superfície contínua do campo (como a peça lixada): marching cubes + cor por lóbulo."""
-    import numpy as np
+def mesh_colors(L, colors, vx, vy, vz):
+    rgb = {n: np.array(hsl_rgb(colors[n])) for n in L}
+    acc = np.zeros((len(vx), 3)); wsum = np.full(len(vx), 1e-9)
+    zb = np.round(vz / VSTEP).astype(int)
+    for b in np.unique(zb):
+        idx = zb == b; z = min(max(b * VSTEP, 0), H)
+        for n in L:
+            st = lobe_state(L, n, z)
+            if not st or st["w"] <= 0.01: continue
+            c = (st["w"] * np.exp(-((vx[idx] - st["c"][0]) ** 2 + (vy[idx] - st["c"][1]) ** 2) / (2 * sig(st["r"]) ** 2))) ** 2
+            acc[idx] += c[:, None] * rgb[n]; wsum[idx] += c
+    return (np.clip(acc / wsum[:, None], 0, 1) * 255).astype(np.uint8)
+
+def build_smooth(periods, rows, geoms, colors, V):
+    """Superfície contínua do mesmo volume (a peça lixada): web com a grade a 5 mm, STL a 2,5 mm."""
     from skimage.measure import marching_cubes
     L = lobes(periods, rows, geoms)
-    pad = 2 * step
-    xs = np.arange(-pad, W + pad + step, step); ys = np.arange(-pad, D + pad + step, step)
-    zs = np.arange(-pad, H + pad + step, step)
-    X, Y = np.meshgrid(xs, ys)
-    inside = (X >= 0) & (X <= W) & (Y >= 0) & (Y <= D)
-    sig = lambda r: r / math.sqrt(2 * math.log(2))
-    vol = np.zeros((len(zs), len(ys), len(xs)), dtype=np.float32)
-    for k, z in enumerate(zs):
-        if z < 0 or z > H: continue
-        f = np.zeros_like(X)
-        for n in L:
-            s = lobe_state(L, n, z)
-            if s and s["w"] > 0.01:
-                f += s["w"] * np.exp(-((X - s["c"][0]) ** 2 + (Y - s["c"][1]) ** 2) / (2 * sig(s["r"]) ** 2))
-        vol[k] = np.where(inside, f, 0)
-    verts, faces, _, _ = marching_cubes(vol, level=0.5, spacing=(step, step, step))
-    verts = verts + np.array([-pad, -pad, -pad])            # (z, y, x) em mm
-    vz, vy, vx = verts[:, 0], verts[:, 1], verts[:, 2]
-    # cor: média das cores dos lóbulos, ponderada pela contribuição de cada um no vértice
-    rgb = {n: np.array(hsl_rgb(colors[n])) for n in L}
-    acc = np.zeros((len(verts), 3)); wsum = np.full(len(verts), 1e-9)
-    zbins = np.round(vz / step).astype(int)
-    for zb in np.unique(zbins):
-        idx = zbins == zb; z = zb * step
-        for n in L:
-            s = lobe_state(L, n, min(max(z, 0), H))
-            if not s or s["w"] <= 0.01: continue
-            c = s["w"] * np.exp(-((vx[idx] - s["c"][0]) ** 2 + (vy[idx] - s["c"][1]) ** 2) / (2 * sig(s["r"]) ** 2))
-            c = c ** 3                                       # fronteiras de cor mais nítidas
-            acc[idx] += c[:, None] * rgb[n]; wsum[idx] += c
-    col = (np.clip(acc / wsum[:, None], 0, 1) * 255).astype(np.uint8)
-    pos = np.stack([vx, vz, vy], 1).astype(np.float32)      # x, altura, y (permutação par: winding mantido)
+    xs, ys, zs, vol = V
+    o = np.array([zs[0], ys[0], xs[0]])
+    # web (leve)
+    v, f, _, _ = marching_cubes(vol[::2, ::2, ::2], level=0.5, spacing=(2 * VSTEP,) * 3)
+    v = v + o; vz, vy, vx = v[:, 0], v[:, 1], v[:, 2]
+    col = mesh_colors(L, colors, vx, vy, vz)
+    pos = np.stack([vx, vz, vy], 1).astype(np.float32)
     docs = ROOT / "docs"
-    with open(docs / "smooth.bin", "wb") as f:
-        f.write(pos.tobytes()); f.write(col.tobytes()); f.write(faces.astype(np.uint32).tobytes())
-    (docs / "smooth.json").write_text(json.dumps({"nv": len(pos), "nf": len(faces), "step": step}))
-    # STL para impressão: x leste, y norte, z altura (mm, escala 1:1)
+    with open(docs / "smooth.bin", "wb") as fh:
+        fh.write(pos.tobytes()); fh.write(col.tobytes()); fh.write(f.astype(np.uint32).tobytes())
+    (docs / "smooth.json").write_text(json.dumps({"nv": len(pos), "nf": len(f), "step": 2 * VSTEP}))
+    # STL 1:1 (fino): x leste, y norte, z altura, mm
+    v, f, _, _ = marching_cubes(vol, level=0.5, spacing=(VSTEP,) * 3)
+    v = v + o
+    P = np.stack([v[:, 2], D - v[:, 1], v[:, 0]], 1).astype(np.float32)
+    tri = P[f[:, [0, 2, 1]]]
+    nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]); nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+    rec = np.zeros(len(tri), dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]); rec["n"] = nrm; rec["v"] = tri
     out = ROOT / "out"; out.mkdir(exist_ok=True)
-    P = np.stack([vx, D - vy, vz], 1).astype(np.float32)
-    tri = P[faces[:, [0, 2, 1]]]                              # reflexão em y → inverte o winding
-    nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
-    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
-    rec = np.zeros(len(tri), dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")])
-    rec["n"] = nrm; rec["v"] = tri
-    with open(out / "sculpture-1-1.stl", "wb") as f:
-        f.write(b"Typography sculpture, 1:1, mm".ljust(80, b" ")); f.write(np.uint32(len(tri)).tobytes()); f.write(rec.tobytes())
-    print(f"lisse: {len(pos)} vertices, {len(faces)} triângulos")
+    with open(out / "sculpture-1-1.stl", "wb") as fh:
+        fh.write(b"Typography sculpture, 1:1, mm".ljust(80, b" ")); fh.write(np.uint32(len(tri)).tobytes()); fh.write(rec.tobytes())
+    print(f"lisse: web {len(pos)} vértices / STL {len(tri)} triângulos")
 
 
 # --- Pranchas -------------------------------------------------------------
@@ -458,10 +480,12 @@ def main():
             "rows": rows, "land": [rings(p) for p in polys(land.simplify(0.4))],
             "cities": {k: [round(c, 1) for c in proj(*v)] for k, v in VILLES.items()}}
     (docs / "meta.json").write_text(json.dumps(meta, ensure_ascii=False))
+    V = None
     if MODE == "field":
-        build_smooth(periods, rows, geoms, colors)
+        V = make_volume(lobes(periods, rows, geoms))
+        build_smooth(periods, rows, geoms, colors, V)
     for t in THICKNESSES:
-        model, csv_rows = (build_field if MODE == "field" else build)(t, periods, rows, geoms)
+        model, csv_rows = build_field(t, periods, rows, geoms, V) if MODE == "field" else build(t, periods, rows, geoms)
         (docs / f"layers-{t:g}.json").write_text(json.dumps(model, ensure_ascii=False, separators=(",", ":")))
         out = ROOT / "out" / "plates"; out.mkdir(parents=True, exist_ok=True)
         with open(out / f"layers-{t:g}mm.csv", "w", newline="") as f:
