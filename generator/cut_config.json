@@ -1,5 +1,5 @@
 {
-  "_comment": "PROVISOIRE (2026-11-01) — à corriger avec les mesures des cartons et la réponse du fablab (lundi 2026-11-02).",
+  "_comment": "PROVISOIRE (2026-11-01) — format A3 choisi par le Sávio ; épaisseur, couleurs et écart à corriger après la formation laser (lundi 2026-11-02). Plateau du laser : 800 × 500 mm, deux A3 debout côte à côte.",
   "thickness_mm": 5,
   "gap_mm": 5,
   "margin_mm": 6,
@@ -7,9 +7,23 @@
   "hole_grid_mm": 20,
   "hole_edge_mm": 6,
   "grid_mm": 2,
-  "rotations_deg": [0, 90, 180, 270],
-  "colors": { "cut": "#FF0000", "engrave": "#0000FF", "reference": "#00B050" },
+  "rotations_deg": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "colors": {
+    "cut": "#FF0000",
+    "engrave": "#0000FF",
+    "reference": "#00B050"
+  },
   "panels": [
-    { "id": "provisoire", "w": 600, "h": 400, "count": 30 }
+    {
+      "id": "A3",
+      "w": 420,
+      "h": 297,
+      "count": 60
+    }
   ]
 }
