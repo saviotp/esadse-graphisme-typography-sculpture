@@ -318,11 +318,21 @@ def build_field(t, periods, rows, geoms, V):
                 keys = list(lf); label = np.stack([lf[k_] for k_ in keys]).argmax(0)
             else:
                 keys = []; label = None
+            owns = {}
             for j, kk in enumerate(keys):
                 fp = np.where(label == j, field, 0.0)
                 if fp.max() < 0.5: continue
-                own = unary_union(filled_polys(contourpy.contour_generator(xs, ys, fp, fill_type="OuterCode"))).intersection(union)
-                for p in polys(own.simplify(SIMPLIFY)):
+                owns[kk] = unary_union(filled_polys(contourpy.contour_generator(xs, ys, fp, fill_type="OuterCode"))).intersection(union)
+            # o que sobra entre as cores (frestas, entalhes) vai para o lóbulo dominante naquele ponto
+            if owns:
+                rest = union.difference(unary_union(list(owns.values())))
+                for r_ in polys(rest.buffer(0)) if not rest.is_empty else []:
+                    q = r_.representative_point()
+                    xi = min(int(round((q.x - xs[0]) / (xs[1] - xs[0]))), len(xs) - 1); yi = min(int(round((q.y - ys[0]) / (ys[1] - ys[0]))), len(ys) - 1)
+                    kk = keys[int(label[yi, xi])]
+                    owns[kk] = owns.get(kk, Polygon()).union(r_)
+            for kk, own in owns.items():
+                for p in polys(own.buffer(0.3).buffer(-0.3).intersection(union).simplify(SIMPLIFY)):
                     key = (kk, hashlib.md5(p.wkb).hexdigest())
                     if key not in shape_ids:
                         shape_ids[key] = len(shapes)
@@ -338,6 +348,7 @@ def build_field(t, periods, rows, geoms, V):
         active_rows = [r for r in rows if r["period"] in active_p]
         perim = sum(p.length for p in polys(union))
         layers.append({"i": i, "z0": round(z0, 2), "d0": round(d0, 1), "d1": round(d1, 1), "disc": disc,
+                       "outline": [rings(p) for p in polys(union.simplify(SIMPLIFY))],
                        "periods": active_p, "places": sorted({r["place"] for r in active_rows}),
                        "pieces": pieces, "bridges": bridges, "area": round(union.area, 1), "cut": round(perim, 1)})
         csv_rows.append([i + 1, round(z0, 1), round(d0), round(d1), DISCS[disc][2], len(polys(union)),

@@ -1,0 +1,15 @@
+{
+  "_comment": "PROVISOIRE (2026-11-01) — à corriger avec les mesures des cartons et la réponse du fablab (lundi 2026-11-02).",
+  "thickness_mm": 5,
+  "gap_mm": 5,
+  "margin_mm": 6,
+  "hole_diameter_mm": 3,
+  "hole_grid_mm": 20,
+  "hole_edge_mm": 6,
+  "grid_mm": 2,
+  "rotations_deg": [0, 90, 180, 270],
+  "colors": { "cut": "#FF0000", "engrave": "#0000FF", "reference": "#00B050" },
+  "panels": [
+    { "id": "provisoire", "w": 600, "h": 400, "count": 30 }
+  ]
+}

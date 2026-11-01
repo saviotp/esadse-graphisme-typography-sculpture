@@ -1,0 +1,29 @@
+{
+ "provisoire": "PROVISOIRE (2026-11-01) — à corriger avec les mesures des cartons et la réponse du fablab (lundi 2026-11-02).",
+ "thickness_mm": 5,
+ "parts": 262,
+ "sheets": 11,
+ "unplaced": [],
+ "holes": 513,
+ "fragile_necks_lt_4mm": [],
+ "parts_without_label": [
+  "017b",
+  "047",
+  "109b",
+  "116b",
+  "117b"
+ ],
+ "fill_ratio": [
+  0.62,
+  0.55,
+  0.58,
+  0.6,
+  0.59,
+  0.57,
+  0.6,
+  0.53,
+  0.67,
+  0.62,
+  0.57
+ ]
+}

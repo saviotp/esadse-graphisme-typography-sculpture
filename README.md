@@ -27,4 +27,10 @@ curl -L -o data/cache/land.geojson https://raw.githubusercontent.com/nvkelso/nat
 .venv/bin/python generator/build.py "<path to the vault note>.md"
 ```
 
-Laser cut files come in a later round, once the prototype is validated against the notes.
+## Laser cut files
+
+`generator/cut.py` reads `docs/layers-<t>.json`, takes each layer's true outline, adds alignment holes on a global grid (a wire or skewer goes through the stack wherever consecutive layers share a grid point), engraves the layer number and a north arrow in single-stroke digits, and nests the parts on the cardboard panels listed in `generator/cut_config.json`.
+
+Output in `out/cut/<t>mm/`: one `sheet-NN.svg` per panel (red = cut, blue = engrave, green dashed = panel outline, **do not cut**), `montage.csv` (part → layer, disc, sheet) and `summary.json` (unplaced parts, fragile necks under 4 mm, parts too small to engrave).
+
+**The current config is provisional** (2026-11-01): panel sizes, thickness, gap and hole diameter still have to be measured on the actual boxes and confirmed with the fablab.
