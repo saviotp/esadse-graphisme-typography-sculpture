@@ -3,7 +3,8 @@
 A topographic relief of the history of Latin typography, built as a 1:1 cardboard prototype (95 × 50 × 30 cm) for the Atelier Graphisme at the École supérieure d'art et design de Saint-Étienne.
 
 - **Height = time.** Five equal discs of 19 cm: Antiquity, early Common Era, Middle Ages, early modern, contemporary.
-- **Width × depth = a faithful world map** (Miller projection, west–east on 50 cm). Each layer covers the places where a typographic period lived at that date.
+- **Width × depth = a faithful world map** (Miller projection, west–east on 50 cm), used as a *vector*, not a mould: each period is a metaball lobe placed at the centre of its territory, sized by its area, that travels from its parent period when it is born. Each layer is the sinuous level curve of the summed field, in the spirit of Tony Cragg's stacked sculptures.
+- **Two renderings:** *Couches* (the cardboard layers as cut) and *Lisse* (the continuous surface, as the piece looks once sanded). `out/sculpture-1-1.stl` is that surface at 1:1, in mm.
 - **Critique built into the form.** The whole European story, from Gutenberg to the Bauhaus, fits in about 6 × 4 cm of the map; most of the world receives no layer because the source book (*Typo*, Friedl, Ott & Stein) does not mention it.
 
 **Viewer:** https://saviotp.github.io/esadse-graphisme-typography-sculpture/
@@ -19,7 +20,7 @@ The data (periods and places) lives in a note of the author's Obsidian vault, no
 | `out/plates/` | 1:1 technical sheets: plan of each disc, front and right elevations, layer table |
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install shapely
+python3 -m venv .venv && .venv/bin/pip install shapely contourpy scikit-image
 mkdir -p data/cache
 curl -L -o data/cache/countries.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson
 curl -L -o data/cache/land.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_land.geojson

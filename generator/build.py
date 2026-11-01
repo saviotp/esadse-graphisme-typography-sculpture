@@ -13,6 +13,7 @@ from shapely.ops import unary_union
 
 ROOT = Path(__file__).resolve().parent.parent
 NOTE = Path(sys.argv[1])
+MODE = sys.argv[2] if len(sys.argv) > 2 else "field"   # "field" (lóbulos) ou "outline" (contorno dos países)
 
 # --- Volume (nota § Volume e § Forme) -------------------------------------
 W, D, H = 500.0, 300.0, 950.0          # mm: oeste–leste, norte–sul, altura
@@ -201,6 +202,179 @@ def build(t, periods, rows, geoms):
     return {"thickness": t, "shapes": shapes, "layers": layers, "stats": stats}, csv_rows
 
 
+# --- Modo « champ » : o mapa como vetor, não como molde ---------------------
+# Cada período é um lóbulo (metaball). Posição = centro do seu território no mapa;
+# raio = raiz da área do território (limitado). Ao nascer, o lóbulo parte do centro do
+# período-pai e migra até o seu lugar; o peso entra e sai suavemente. A seção de cada
+# camada é a curva de nível 0,5 do campo somado: curvas contínuas, que se dividem em
+# vários picos quando os lóbulos se afastam.
+PARENT = {4: 1, 5: 4, 6: 3, 7: 5, 8: 7, 9: 8, 10: 9, 11: 10, 12: 11, 13: 12, 14: 13, 15: 14,
+          16: 15, 17: 16, 18: 17, 19: 18, 20: 19, 21: 20, 22: 21, 23: 22}   # 6 ← 3 : « papier appris des Chinois »
+R_MIN, R_MAX, R_K = 16.0, 110.0, 0.9     # mm
+FADE = 45.0                              # mm de altura para entrar/sair
+MIGRATE = 70.0                           # mm de altura para viajar do pai até o lugar
+GRID = 1.0                               # mm
+
+def smooth(u): u = min(max(u, 0.0), 1.0); return u * u * (3 - 2 * u)
+
+def lobes(periods, rows, geoms):
+    L = {}
+    for n, p in periods.items():
+        terr = unary_union([geoms[(r["place"], r["kind"])] for r in rows if r["period"] == n])
+        if terr.is_empty: continue
+        c = terr.centroid
+        r = min(max(R_K * math.sqrt(terr.area), R_MIN), R_MAX)
+        zs = date_to_z(max(p["start"], DISCS[0][0])); ze = date_to_z(min(p["end"], DISCS[-1][1]))
+        L[n] = {"c": (c.x, c.y), "r": r, "zs": zs, "ze": ze}
+    return L
+
+def lobe_state(L, n, z):
+    """Peso, centro e raio do lóbulo n na altura z.
+    Entra: parte do centro do pai com peso cheio e migra até o seu lugar (o « braço »).
+    Sai: dissolve-se depois do fim, durante FADE mm, dentro do que vem por cima."""
+    l = L[n]
+    tail = FADE if l["ze"] < H else 0.0
+    if z < l["zs"] - 1e-6 or z > l["ze"] + tail + 1e-6: return None
+    span = max(l["ze"] - l["zs"], 1e-6)
+    w_in = smooth((z - l["zs"]) / min(FADE, span)) if l["zs"] > 0 else 1.0
+    w_out = smooth((l["ze"] + tail - z) / tail) if (tail and z > l["ze"]) else 1.0
+    cx, cy = l["c"]
+    par = PARENT.get(n)
+    if par in L:
+        u = smooth((z - l["zs"]) / min(MIGRATE, max(span, FADE)))
+        pc = L[par]["c"]
+        cx, cy = pc[0] + (cx - pc[0]) * u, pc[1] + (cy - pc[1]) * u
+        w_in = max(w_in, 1 - u)                 # nasce ligado ao pai
+    return {"w": w_in * w_out, "c": (cx, cy), "r": l["r"]}
+
+def filled_polys(cg, level=0.5):
+    out = []
+    fills, codes = cg.filled(level, 1e9)
+    for pts, cds in zip(fills, codes):
+        rings_, cur = [], []
+        for (x, y), cd in zip(pts, cds):
+            if cd == 1 and cur: rings_.append(cur); cur = []
+            cur.append((x, y))
+        if cur: rings_.append(cur)
+        rings_ = [r for r in rings_ if len(r) >= 4]
+        if rings_:
+            p = Polygon(rings_[0], rings_[1:]).buffer(0)
+            out += polys(p)
+    return out
+
+def build_field(t, periods, rows, geoms):
+    import numpy as np, contourpy
+    L = lobes(periods, rows, geoms)
+    xs = np.arange(0, W + GRID, GRID); ys = np.arange(0, D + GRID, GRID)
+    X, Y = np.meshgrid(xs, ys)
+    n = int(round(H / t))
+    shapes, shape_ids, layers, csv_rows = [], {}, [], []
+    prev_union = None
+    for i in range(n):
+        z0, z1 = i * t, (i + 1) * t; zm = (z0 + z1) / 2
+        d0, disc = z_to_date(z0); d1, _ = z_to_date(z1 - 1e-6)
+        st = {k: s for k in L if (s := lobe_state(L, k, zm)) and s["w"] > 0.02}
+        pieces = []; union = Polygon()
+        if st:
+            keys = list(st)
+            contrib = np.stack([st[k]["w"] * np.exp(-((X - st[k]["c"][0]) ** 2 + (Y - st[k]["c"][1]) ** 2)
+                                                    / (2 * (st[k]["r"] / math.sqrt(2 * math.log(2))) ** 2)) for k in keys])
+            field = contrib.sum(0)
+            union = unary_union(filled_polys(contourpy.contour_generator(xs, ys, field, fill_type="OuterCode"))).intersection(BOX)
+            label = contrib.argmax(0)
+            for j, k in enumerate(keys):
+                fp = np.where(label == j, field, 0.0)
+                if fp.max() < 0.5: continue
+                own = unary_union(filled_polys(contourpy.contour_generator(xs, ys, fp, fill_type="OuterCode"))).intersection(union)
+                for p in polys(own.simplify(SIMPLIFY)):
+                    key = (k, hashlib.md5(p.wkb).hexdigest())
+                    if key not in shape_ids:
+                        shape_ids[key] = len(shapes)
+                        shapes.append({"period": k, "rings": rings(p), "area": round(p.area, 1)})
+                    pieces.append(shape_ids[key])
+        bridges = []
+        if prev_union is not None:
+            for comp in polys(union):
+                if comp.intersection(prev_union).area < 1.0:
+                    c = comp.representative_point()
+                    bridges.append({"x": round(c.x, 1), "y": round(c.y, 1), "area": round(comp.area, 1)})
+        active_p = sorted(st)
+        active_rows = [r for r in rows if r["period"] in active_p]
+        perim = sum(p.length for p in polys(union))
+        layers.append({"i": i, "z0": round(z0, 2), "d0": round(d0, 1), "d1": round(d1, 1), "disc": disc,
+                       "periods": active_p, "places": sorted({r["place"] for r in active_rows}),
+                       "pieces": pieces, "bridges": bridges, "area": round(union.area, 1), "cut": round(perim, 1)})
+        csv_rows.append([i + 1, round(z0, 1), round(d0), round(d1), DISCS[disc][2], len(polys(union)),
+                         len(bridges), round(union.area / 100, 1), round(perim / 10, 1),
+                         " · ".join(str(p) for p in active_p)])
+        prev_union = union
+    stats = {"layers": n, "bridges": sum(len(l["bridges"]) for l in layers),
+             "cardboard_m2": round(sum(l["area"] for l in layers) / 1e6, 2),
+             "cut_m": round(sum(l["cut"] for l in layers) / 1000, 1),
+             "empty_layers": [l["i"] + 1 for l in layers if not l["pieces"]], "mode": "field",
+             "lobes": {k: {"c": [round(v, 1) for v in l["c"]], "r": round(l["r"], 1)} for k, l in L.items()}}
+    return {"thickness": t, "shapes": shapes, "layers": layers, "stats": stats}, csv_rows
+
+
+def hsl_rgb(s):
+    import colorsys
+    h, sat, l = [float(v.strip("%")) for v in re.findall(r"[\d.]+%?", s)]
+    return colorsys.hls_to_rgb(h / 360, l / 100, sat / 100)
+
+def build_smooth(periods, rows, geoms, colors, step=4.0):
+    """Superfície contínua do campo (como a peça lixada): marching cubes + cor por lóbulo."""
+    import numpy as np
+    from skimage.measure import marching_cubes
+    L = lobes(periods, rows, geoms)
+    pad = 2 * step
+    xs = np.arange(-pad, W + pad + step, step); ys = np.arange(-pad, D + pad + step, step)
+    zs = np.arange(-pad, H + pad + step, step)
+    X, Y = np.meshgrid(xs, ys)
+    inside = (X >= 0) & (X <= W) & (Y >= 0) & (Y <= D)
+    sig = lambda r: r / math.sqrt(2 * math.log(2))
+    vol = np.zeros((len(zs), len(ys), len(xs)), dtype=np.float32)
+    for k, z in enumerate(zs):
+        if z < 0 or z > H: continue
+        f = np.zeros_like(X)
+        for n in L:
+            s = lobe_state(L, n, z)
+            if s and s["w"] > 0.01:
+                f += s["w"] * np.exp(-((X - s["c"][0]) ** 2 + (Y - s["c"][1]) ** 2) / (2 * sig(s["r"]) ** 2))
+        vol[k] = np.where(inside, f, 0)
+    verts, faces, _, _ = marching_cubes(vol, level=0.5, spacing=(step, step, step))
+    verts = verts + np.array([-pad, -pad, -pad])            # (z, y, x) em mm
+    vz, vy, vx = verts[:, 0], verts[:, 1], verts[:, 2]
+    # cor: média das cores dos lóbulos, ponderada pela contribuição de cada um no vértice
+    rgb = {n: np.array(hsl_rgb(colors[n])) for n in L}
+    acc = np.zeros((len(verts), 3)); wsum = np.full(len(verts), 1e-9)
+    zbins = np.round(vz / step).astype(int)
+    for zb in np.unique(zbins):
+        idx = zbins == zb; z = zb * step
+        for n in L:
+            s = lobe_state(L, n, min(max(z, 0), H))
+            if not s or s["w"] <= 0.01: continue
+            c = s["w"] * np.exp(-((vx[idx] - s["c"][0]) ** 2 + (vy[idx] - s["c"][1]) ** 2) / (2 * sig(s["r"]) ** 2))
+            c = c ** 3                                       # fronteiras de cor mais nítidas
+            acc[idx] += c[:, None] * rgb[n]; wsum[idx] += c
+    col = (np.clip(acc / wsum[:, None], 0, 1) * 255).astype(np.uint8)
+    pos = np.stack([vx, vz, vy], 1).astype(np.float32)      # x, altura, y (permutação par: winding mantido)
+    docs = ROOT / "docs"
+    with open(docs / "smooth.bin", "wb") as f:
+        f.write(pos.tobytes()); f.write(col.tobytes()); f.write(faces.astype(np.uint32).tobytes())
+    (docs / "smooth.json").write_text(json.dumps({"nv": len(pos), "nf": len(faces), "step": step}))
+    # STL para impressão: x leste, y norte, z altura (mm, escala 1:1)
+    out = ROOT / "out"; out.mkdir(exist_ok=True)
+    P = np.stack([vx, D - vy, vz], 1).astype(np.float32)
+    tri = P[faces[:, [0, 2, 1]]]                              # reflexão em y → inverte o winding
+    nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+    rec = np.zeros(len(tri), dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")])
+    rec["n"] = nrm; rec["v"] = tri
+    with open(out / "sculpture-1-1.stl", "wb") as f:
+        f.write(b"Typography sculpture, 1:1, mm".ljust(80, b" ")); f.write(np.uint32(len(tri)).tobytes()); f.write(rec.tobytes())
+    print(f"lisse: {len(pos)} vertices, {len(faces)} triângulos")
+
+
 # --- Pranchas -------------------------------------------------------------
 def svg_doc(w, h, body, title):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}" '
@@ -284,8 +458,10 @@ def main():
             "rows": rows, "land": [rings(p) for p in polys(land.simplify(0.4))],
             "cities": {k: [round(c, 1) for c in proj(*v)] for k, v in VILLES.items()}}
     (docs / "meta.json").write_text(json.dumps(meta, ensure_ascii=False))
+    if MODE == "field":
+        build_smooth(periods, rows, geoms, colors)
     for t in THICKNESSES:
-        model, csv_rows = build(t, periods, rows, geoms)
+        model, csv_rows = (build_field if MODE == "field" else build)(t, periods, rows, geoms)
         (docs / f"layers-{t:g}.json").write_text(json.dumps(model, ensure_ascii=False, separators=(",", ":")))
         out = ROOT / "out" / "plates"; out.mkdir(parents=True, exist_ok=True)
         with open(out / f"layers-{t:g}mm.csv", "w", newline="") as f:
