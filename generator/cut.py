@@ -33,7 +33,14 @@ model = json.loads((ROOT / "docs" / f"layers-{T:g}.json").read_text())
 meta = json.loads((ROOT / "docs" / "meta.json").read_text())
 S = model["shapes"]
 
-def poly(r): return Polygon(r[0], r[1:]).buffer(0)
+# Maquete em escala reduzida: 2 = 1:2, uma camada em duas, reduzida à metade (mesma espessura de papelão).
+SCALE_N = int(CFG.get("scale_divisor", 1))
+ONLY = CFG.get("only_layers")          # [primeira, última], na numeração já reduzida
+COUPON = CFG.get("coupon_holes_mm")    # diâmetros a testar com o palito, numa plaquinha à parte
+model["layers"] = model["layers"][::SCALE_N]
+for new_i, L in enumerate(model["layers"]): L["i"] = new_i
+
+def poly(r): return affinity.scale(Polygon(r[0], r[1:]).buffer(0), 1 / SCALE_N, 1 / SCALE_N, origin=(0, 0))
 def comps(g):
     if g.is_empty: return []
     return [c for c in (g.geoms if hasattr(g, "geoms") else [g]) if c.area >= 4]
@@ -76,9 +83,17 @@ for L in model["layers"]:
         holes = pick_holes(c, prev)
         now.update(holes)
         lab = f"{L['i'] + 1:03d}" + (chr(ord("a") + j) if len(cs) > 1 else "")
-        bridge = any(c.contains(Point(b["x"], b["y"])) or c.distance(Point(b["x"], b["y"])) < 1 for b in L["bridges"])
+        bridge = any(c.distance(Point(b["x"] / SCALE_N, b["y"] / SCALE_N)) < 1 for b in L["bridges"])
         parts.append({"id": lab, "layer": L["i"] + 1, "disc": L["disc"] + 1, "geom": c, "holes": holes, "bridge": bridge})
     prev = now
+
+# O filtro vem depois do laço: os furos continuam alinhados entre os lotes cortados em dias diferentes.
+if ONLY: parts = [p for p in parts if ONLY[0] <= p["layer"] <= ONLY[1]]
+if COUPON:
+    n_c = len(COUPON)
+    box = Polygon([(0, 0), (20 * (n_c + 1), 0), (20 * (n_c + 1), 30), (0, 30)])
+    parts.append({"id": "e", "layer": 0, "disc": 0, "geom": box, "holes": [(20.0 * (k + 1), 10.0) for k in range(n_c)],
+                  "hole_d": COUPON, "bridge": False})
 
 
 # --- Gravação: algarismos de 7 segmentos (traço simples) e seta do norte ----
@@ -167,7 +182,7 @@ for pt in order:
 
 
 # --- SVG por chapa -----------------------------------------------------------
-out = ROOT / "out" / "cut" / f"{T:g}mm"; out.mkdir(parents=True, exist_ok=True)
+out = ROOT / "out" / "cut" / CFG.get("output", f"{T:g}mm"); out.mkdir(parents=True, exist_ok=True)
 for f in out.glob("sheet-*.svg"): f.unlink()
 def d_of(g):
     ds = []
@@ -183,8 +198,9 @@ for n, sh in enumerate(used, 1):
         pt = it["part"]
         place = lambda g: affinity.translate(affinity.rotate(g, it["deg"], origin=(0, 0)), it["dx"], it["dy"])
         cut.append(d_of(place(pt["geom"])))
-        for hx, hy in pt["holes"]:
-            cut.append(d_of(place(Point(hx, hy).buffer(HOLE_R, 16))))
+        for k, (hx, hy) in enumerate(pt["holes"]):
+            r = pt["hole_d"][k] / 2 if "hole_d" in pt else HOLE_R
+            cut.append(d_of(place(Point(hx, hy).buffer(r, 16))))
         for l in engraving(pt["geom"], pt["holes"], pt["id"]):
             eng.append("M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in place(l).coords))
         rows.append([pt["id"], pt["layer"], pt["disc"], f"{n:02d}", sh["id"], it["deg"], len(pt["holes"]),
@@ -204,6 +220,7 @@ with open(out / "montage.csv", "w", newline="") as f:
     wr.writerows(sorted(rows, key=lambda r: r[0]))
 summary = {"provisoire": CFG.get("_comment", ""), "thickness_mm": T, "parts": len(parts), "sheets": len(used),
            "unplaced": unplaced, "holes": sum(len(p["holes"]) for p in parts),
+           "cut_m": round(sum(p["geom"].length + len(p["holes"]) * 2 * math.pi * HOLE_R for p in parts) / 1000, 1),
            "fragile_necks_lt_4mm": [p["id"] for p in parts if len(comps(p["geom"].buffer(-2).buffer(2))) > 1],
            "parts_without_label": [p["id"] for p in parts if not engraving(p["geom"], p["holes"], p["id"])],
            "fill_ratio": [round(sum(it["part"]["geom"].area for it in s["items"]) / (s["w"] * s["h"]), 2) for s in used]}

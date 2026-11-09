@@ -1,0 +1,17 @@
+{
+  "_comment": "Maquete 1:2, ensaio de 2026-11-10: camadas 1 a 10 (a pilha de medida já é o pé da escultura) e plaquinha 'e' com furos de 2,8, 3,0 e 3,2 mm, da esquerda para a direita, para testar o palito. As cores ainda são as provisórias.",
+  "output": "3mm-1x2-essai",
+  "scale_divisor": 2,
+  "only_layers": [1, 10],
+  "coupon_holes_mm": [2.8, 3.0, 3.2],
+  "thickness_mm": 3,
+  "gap_mm": 5,
+  "margin_mm": 6,
+  "hole_diameter_mm": 3,
+  "hole_grid_mm": 20,
+  "hole_edge_mm": 6,
+  "grid_mm": 2,
+  "rotations_deg": [0, 90, 180, 270],
+  "colors": { "cut": "#FF0000", "engrave": "#0000FF", "reference": "#00B050" },
+  "panels": [{ "id": "50x65", "w": 650, "h": 500, "count": 2 }]
+}

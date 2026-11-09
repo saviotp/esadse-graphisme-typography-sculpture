@@ -1,0 +1,16 @@
+{
+ "provisoire": "Maquete 1:2, ensaio de 2026-11-10: camadas 1 a 10 (a pilha de medida já é o pé da escultura) e plaquinha 'e' com furos de 2,8, 3,0 e 3,2 mm, da esquerda para a direita, para testar o palito. As cores ainda são as provisórias.",
+ "thickness_mm": 3,
+ "parts": 11,
+ "sheets": 1,
+ "unplaced": [],
+ "holes": 13,
+ "cut_m": 1.1,
+ "fragile_necks_lt_4mm": [],
+ "parts_without_label": [
+  "001"
+ ],
+ "fill_ratio": [
+  0.02
+ ]
+}

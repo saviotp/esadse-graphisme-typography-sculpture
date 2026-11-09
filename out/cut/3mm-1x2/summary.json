@@ -1,0 +1,25 @@
+{
+ "provisoire": "Maquete 1:2, camadas 11 a 158, corte principal de 2026-11-16. Carton gris 50 × 65 em 30/10. As cores ainda são as provisórias: conferir no folheto da formação laser.",
+ "thickness_mm": 3,
+ "parts": 207,
+ "sheets": 2,
+ "unplaced": [],
+ "holes": 252,
+ "cut_m": 31.7,
+ "fragile_necks_lt_4mm": [],
+ "parts_without_label": [
+  "015b",
+  "037",
+  "038",
+  "039",
+  "091",
+  "097b",
+  "098b",
+  "145b",
+  "146a"
+ ],
+ "fill_ratio": [
+  0.5,
+  0.48
+ ]
+}

@@ -1,0 +1,16 @@
+{
+  "_comment": "Maquete 1:2, camadas 11 a 158, corte principal de 2026-11-16. Carton gris 50 × 65 em 30/10. As cores ainda são as provisórias: conferir no folheto da formação laser.",
+  "output": "3mm-1x2",
+  "scale_divisor": 2,
+  "only_layers": [11, 158],
+  "thickness_mm": 3,
+  "gap_mm": 5,
+  "margin_mm": 6,
+  "hole_diameter_mm": 3,
+  "hole_grid_mm": 20,
+  "hole_edge_mm": 6,
+  "grid_mm": 2,
+  "rotations_deg": [0, 90, 180, 270],
+  "colors": { "cut": "#FF0000", "engrave": "#0000FF", "reference": "#00B050" },
+  "panels": [{ "id": "50x65", "w": 650, "h": 500, "count": 6 }]
+}
