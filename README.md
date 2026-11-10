@@ -33,4 +33,6 @@ curl -L -o data/cache/land.geojson https://raw.githubusercontent.com/nvkelso/nat
 
 Output in `out/cut/<t>mm/`: one `sheet-NN.svg` per panel (red = cut, blue = engrave, green dashed = panel outline, **do not cut**), `montage.csv` (part → layer, disc, sheet) and `summary.json` (unplaced parts, fragile necks under 4 mm, parts too small to engrave).
 
+**Laser-ready variant (2026-11-10).** With `"guide_laser": true` in the config, `cut.py` follows the fablab guide (p. 11): cut = outline of 0.001 pt (0.00035 mm), engraving = black *filled* shapes (digits 0.4 mm wide), no green reference rectangle, no overlapping paths. `"reserved_first_panel": [x0, y0, x1, y1]` keeps a strip of the first panel free (already cut in the test run). Configs: `cut_config_essai_guide.json` (10 test layers + hole coupon, from the 3 mm model), `cut_config_2mm_guide.json` (main 1:2 cut on 2 mm grey cardboard, `docs/layers-2.json`). Output: `out/cut/essai-laser/`, `out/cut/2mm-1x2-laser/`; `out/cut/teste-minimo/` is a hand-made 30 × 30 mm square with a 3 mm hole and an engraved digit, to tell a file problem from a machine problem. The 2 mm thickness is nominal until the 10-layer stack is measured.
+
 **The current config is provisional** (2026-11-01): panel sizes, thickness, gap and hole diameter still have to be measured on the actual boxes and confirmed with the fablab.

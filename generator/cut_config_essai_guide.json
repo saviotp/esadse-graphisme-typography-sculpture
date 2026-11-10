@@ -1,0 +1,41 @@
+{
+  "_comment": "Essai 2026-11-10, formato do guia laser: corte 0,001 pt, gravação preenchida, sem contorno verde. Formas das camadas 1–10 do modelo de 3 mm.",
+  "output": "essai-laser",
+  "scale_divisor": 2,
+  "only_layers": [
+    1,
+    10
+  ],
+  "coupon_holes_mm": [
+    2.8,
+    3.0,
+    3.2
+  ],
+  "thickness_mm": 3,
+  "gap_mm": 5,
+  "margin_mm": 6,
+  "hole_diameter_mm": 3,
+  "hole_grid_mm": 20,
+  "hole_edge_mm": 6,
+  "grid_mm": 2,
+  "rotations_deg": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "colors": {
+    "cut": "#FF0000",
+    "engrave": "#0000FF",
+    "reference": "#00B050"
+  },
+  "panels": [
+    {
+      "id": "50x65",
+      "w": 650,
+      "h": 500,
+      "count": 2
+    }
+  ],
+  "guide_laser": true
+}

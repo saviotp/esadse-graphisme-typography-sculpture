@@ -1,0 +1,16 @@
+{
+ "provisoire": "Essai 2026-11-10, formato do guia laser: corte 0,001 pt, gravação preenchida, sem contorno verde. Formas das camadas 1–10 do modelo de 3 mm.",
+ "thickness_mm": 3,
+ "parts": 11,
+ "sheets": 1,
+ "unplaced": [],
+ "holes": 13,
+ "cut_m": 1.1,
+ "fragile_necks_lt_4mm": [],
+ "parts_without_label": [
+  "001"
+ ],
+ "fill_ratio": [
+  0.02
+ ]
+}

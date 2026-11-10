@@ -1,0 +1,36 @@
+{
+ "provisoire": "Maquete 1:2 em carton gris de 2 mm (1 200 g/m²), camadas 11 a 237 do modelo de 2 mm; a primeira chapa é a do ensaio de 2026-11-10: faixa 0–440 × 0–46 mm já cortada, reservada. Espessura nominal, a corrigir com a pilha medida. Cores provisórias.",
+ "thickness_mm": 2,
+ "parts": 314,
+ "sheets": 3,
+ "unplaced": [],
+ "holes": 382,
+ "cut_m": 48.1,
+ "fragile_necks_lt_4mm": [
+  "059"
+ ],
+ "parts_without_label": [
+  "022b",
+  "038",
+  "055",
+  "056",
+  "057",
+  "058",
+  "059",
+  "135",
+  "136a",
+  "136b",
+  "137",
+  "145b",
+  "146b",
+  "203",
+  "217b",
+  "218a",
+  "219a"
+ ],
+ "fill_ratio": [
+  0.48,
+  0.49,
+  0.51
+ ]
+}

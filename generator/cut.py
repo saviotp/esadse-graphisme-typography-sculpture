@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CFG = json.loads(Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "generator" / "cut_config.json").read_text())
 T = CFG["thickness_mm"]; GAP = CFG["gap_mm"]; MARGIN = CFG["margin_mm"]; RES = CFG["grid_mm"]
 HOLE_R = CFG["hole_diameter_mm"] / 2; HGRID = CFG["hole_grid_mm"]; HEDGE = CFG["hole_edge_mm"]
-COL = CFG["colors"]
+COL = CFG["colors"]; ENG_W = CFG.get("engrave_width_mm", 0.4)
 
 model = json.loads((ROOT / "docs" / f"layers-{T:g}.json").read_text())
 meta = json.loads((ROOT / "docs" / "meta.json").read_text())
@@ -150,6 +150,12 @@ for spec in CFG["panels"]:
         panels.append({"id": f"{spec['id']}-{k + 1}", "w": spec["w"], "h": spec["h"],
                        "occ": np.zeros((int(spec["h"] / RES), int(spec["w"] / RES)), dtype=np.float32), "items": []})
 
+# Faixa já cortada no ensaio, na primeira chapa: (x0, y0, x1, y1) em mm, nada é encaixado ali.
+RES_RECT = CFG.get("reserved_first_panel")
+if RES_RECT and panels:
+    x0, y0, x1, y1 = RES_RECT
+    panels[0]["occ"][int(y0 / RES):int(math.ceil(y1 / RES)), int(x0 / RES):int(math.ceil(x1 / RES))] = 1
+
 order = sorted(parts, key=lambda p: (p["disc"], -p["geom"].area))
 unplaced = []
 for pt in order:
@@ -206,12 +212,27 @@ for n, sh in enumerate(used, 1):
         rows.append([pt["id"], pt["layer"], pt["disc"], f"{n:02d}", sh["id"], it["deg"], len(pt["holes"]),
                      "oui" if pt["bridge"] else "", round(pt["geom"].area / 100, 1)])
     w, h = sh["w"], sh["h"]
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">\n'
-           f'<g id="reference-ne-pas-decouper" fill="none" stroke="{COL["reference"]}" stroke-width="0.3" stroke-dasharray="4,3">'
-           f'<rect x="0" y="0" width="{w}" height="{h}"/></g>\n'
-           f'<g id="decoupe" fill="none" stroke="{COL["cut"]}" stroke-width="0.01"><path d="{"".join(cut)}"/></g>\n'
-           f'<g id="gravure" fill="none" stroke="{COL["engrave"]}" stroke-width="0.01"><path d="{" ".join(eng)}"/></g>\n'
-           f'</svg>\n')
+    if CFG.get("guide_laser"):
+        # Guia da découpe laser 2026 (p. 11): corte = contorno de 0,001 pt; gravação = forma PREENCHIDA de preto;
+        # nada de contorno de referência no arquivo (a máquina o leria como traço) nem de sobreposição.
+        eng_polys = []
+        for it in sh["items"]:
+            pt = it["part"]
+            place = lambda g: affinity.translate(affinity.rotate(g, it["deg"], origin=(0, 0)), it["dx"], it["dy"])
+            for l in engraving(pt["geom"], pt["holes"], pt["id"]):
+                eng_polys.append(place(l).buffer(ENG_W / 2, 4))
+        eng_d = d_of(unary_union(eng_polys)) if eng_polys else ""
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">\n'
+               f'<g id="decoupe" fill="none" stroke="#000000" stroke-width="0.00035"><path d="{"".join(cut)}"/></g>\n'
+               f'<g id="gravure" fill="#000000" fill-rule="evenodd" stroke="none"><path d="{eng_d}"/></g>\n'
+               f'</svg>\n')
+    else:
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">\n'
+               f'<g id="reference-ne-pas-decouper" fill="none" stroke="{COL["reference"]}" stroke-width="0.3" stroke-dasharray="4,3">'
+               f'<rect x="0" y="0" width="{w}" height="{h}"/></g>\n'
+               f'<g id="decoupe" fill="none" stroke="{COL["cut"]}" stroke-width="0.01"><path d="{"".join(cut)}"/></g>\n'
+               f'<g id="gravure" fill="none" stroke="{COL["engrave"]}" stroke-width="0.01"><path d="{" ".join(eng)}"/></g>\n'
+               f'</svg>\n')
     (out / f"sheet-{n:02d}.svg").write_text(svg)
 
 with open(out / "montage.csv", "w", newline="") as f:

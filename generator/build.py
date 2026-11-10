@@ -22,7 +22,7 @@ W, D, H = 500.0, 300.0, 950.0          # mm: oeste–leste, norte–sul, altura
 DISCS = [(-3000, 0, "Antiquité"), (0, 500, "Début de l'ère commune"), (500, 1450, "Moyen Âge"),
          (1450, 1914, "Époque moderne"), (1914, 2026, "Contemporaine")]
 DISC_H = H / len(DISCS)                 # 190 mm
-THICKNESSES = [5.0, 3.0]
+THICKNESSES = [5.0, 3.0, 2.0]
 CITY_D = 8.0                            # diâmetro do círculo de cidade (mm)
 REGION_PAD = 1.5                        # engrossa regiões finas (vale do Nilo)
 SIMPLIFY = 0.25                         # mm
